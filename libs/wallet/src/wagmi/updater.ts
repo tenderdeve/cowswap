@@ -202,7 +202,7 @@ function useSafeInfo(): GnosisSafeInfo | undefined {
             }
           })
         } catch {
-          console.debug(`[WalletUpdater] Error fetching safe info over iframe ${account}`)
+          console.debug(`[COW][WalletUpdater] Error fetching safe info over iframe ${account}`)
           setSafeInfo(undefined)
         }
       } else {
@@ -221,7 +221,7 @@ function useSafeInfo(): GnosisSafeInfo | undefined {
               isReadOnly: false,
             }))
           } catch {
-            console.debug(`[WalletUpdater] Address ${account} is likely not a Safe (API didn't return Safe info)`)
+            console.debug(`[COW][WalletUpdater] Address ${account} is likely not a Safe (API didn't return Safe info)`)
             setSafeInfo(undefined)
           }
         } else {
