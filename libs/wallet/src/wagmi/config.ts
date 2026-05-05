@@ -69,28 +69,26 @@ if (typeof window !== 'undefined' && (IS_CROSS_ORIGIN_IFRAME || isInjectedWidget
 }
 
 function getConnectors(): ConnectorInstance[] {
-  if (IS_CROSS_ORIGIN_IFRAME) {
-    if (isInjectedWidget()) {
-      // No plain `injected` connector here — MetaMask is a per-origin singleton, so registering
-      // it would leak wallet state between the widget and the main app (connecting in one
-      // auto-connects the other). The widget connects via WidgetEthereumProvider (dapp mode)
-      // or WalletConnect (standalone mode) instead.
-      return [
-        injected({
-          shimDisconnect: true,
-          target: {
-            name: 'CoW Widget',
-            id: COW_WIDGET_CONNECTOR_ID,
-            provider: new WidgetEthereumProvider() as EIP1193Provider,
-          },
-        }),
-        // Include Safe connector so the widget can auto-connect when hosted inside a Safe app
-        // (e.g. widget-configurator loaded as a Safe App). IframeSafeSdkBridge in widget-lib
-        // already forwards the Safe SDK postMessages through the configurator to app.safe.global.
-        safe({ shimDisconnect: true }),
-      ]
-    }
+  // Widget context — checked BEFORE the cross-origin iframe check because the widget
+  // can be same-origin (e.g. widget-configurator uses the same baseUrl).
+  if (isInjectedWidget()) {
+    return [
+      injected({
+        shimDisconnect: true,
+        target: {
+          name: 'CoW Widget',
+          id: COW_WIDGET_CONNECTOR_ID,
+          provider: new WidgetEthereumProvider() as EIP1193Provider,
+        },
+      }),
+      // Include Safe connector so the widget can auto-connect when hosted inside a Safe app
+      // (e.g. widget-configurator loaded as a Safe App). IframeSafeSdkBridge in widget-lib
+      // already forwards the Safe SDK postMessages through the configurator to app.safe.global.
+      safe({ shimDisconnect: true }),
+    ]
+  }
 
+  if (IS_CROSS_ORIGIN_IFRAME) {
     // Safe iframe: only the safe connector is needed. Do NOT include the plain `injected`
     // connector — MetaMask is a per-origin singleton and fires `accountsChanged` across all
     // same-origin frames. This causes the Safe iframe to briefly switch to the regular tab's
