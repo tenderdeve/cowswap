@@ -4,7 +4,7 @@ import { isImTokenBrowser, isInjectedWidget } from '@cowprotocol/common-utils'
 import { SafeProvider } from '@safe-global/safe-apps-react-sdk'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { reconnect } from '@wagmi/core'
+import { connect, reconnect } from '@wagmi/core'
 import { WagmiProvider } from 'wagmi'
 
 import { config, reownAppKit } from './config'
@@ -87,10 +87,20 @@ function ReconnectOnMount(): null {
 
 function OpenWalletModalOnCustomEvent(): null {
   useEffect(() => {
-    if (!reownAppKit) return
-    const appKit = reownAppKit
     const handler = (): void => {
-      void appKit.open()
+      if (reownAppKit) {
+        // Regular app: open AppKit's wallet selection modal
+        void reownAppKit.open()
+      } else {
+        // Widget (no AppKit): connect directly via the injected connector.
+        // This triggers the browser extension popup (MetaMask/Rabby account selector).
+        const injectedConnector = config.connectors.find((c) => c.id === 'injected')
+        if (injectedConnector) {
+          void connect(config, { connector: injectedConnector }).catch((error) => {
+            console.debug('[OpenWalletModal] injected connect failed', error)
+          })
+        }
+      }
     }
     document.addEventListener(OPEN_WALLET_MODAL_EVENT, handler)
     return () => document.removeEventListener(OPEN_WALLET_MODAL_EVENT, handler)
