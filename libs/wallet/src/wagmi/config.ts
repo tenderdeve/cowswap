@@ -28,10 +28,11 @@ export const IS_CROSS_ORIGIN_IFRAME = (() => {
   }
 })()
 
-// Safe App iframe: skip AppKit — it interferes with Safe's postMessage flow.
-// The widget needs AppKit for the standalone-mode wallet modal, so it keeps AppKit
-// but with localStorage isolation (see below) to avoid cross-context state leaks.
-const isSafeIframe = IS_CROSS_ORIGIN_IFRAME && !isInjectedWidget()
+// Skip AppKit in the Safe iframe (interferes with Safe's postMessage flow) and in the
+// widget (AppKit's WagmiAdapter.watchAccount/syncConnections reacts to browser extension
+// accountsChanged events that fire across all same-origin tabs, causing cross-tab wallet sync).
+// Both use plain wagmi configs instead — the widget connects via injected extensions directly.
+const skipAppKit = IS_CROSS_ORIGIN_IFRAME || isInjectedWidget()
 
 function getConnectors(): ConnectorInstance[] {
   // Widget context — checked BEFORE the cross-origin iframe check because the widget
@@ -124,8 +125,10 @@ let wagmiAdapter: WagmiAdapter | null = null
 let reownAppKit: ReturnType<typeof createAppKit> | null = null
 let config: Config
 
-if (isSafeIframe) {
-  // Safe App iframe: no AppKit — use a plain wagmi config with only the Safe connector.
+if (skipAppKit) {
+  // Safe iframe or widget: no AppKit — use a plain wagmi config.
+  // This avoids AppKit's WagmiAdapter.watchAccount/syncConnections which amplify
+  // browser extension events across same-origin tabs.
   config = createConfig({
     connectors,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,23 +147,6 @@ if (isSafeIframe) {
   })
 
   config = wagmiAdapter.wagmiConfig
-
-  const RECENT_CONNECTOR_KEY = 'recentConnectorId'
-  if (isInjectedWidget()) {
-    // Recent connector takes priority, and we have to override it in the widget
-    storage.setItem(RECENT_CONNECTOR_KEY, COW_WIDGET_CONNECTOR_ID)
-
-    // Prevent the CoW Widget connector from appearing in the wallet modal.
-    // It must remain registered with wagmi (for reconnect/connect to work) but should not be
-    // shown as an option — users connect via the parent dapp's wallet, not by picking a wallet manually.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const _addWagmiConnector = (wagmiAdapter as any).addWagmiConnector.bind(wagmiAdapter)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(wagmiAdapter as any).addWagmiConnector = async (connector: { id: string }) => {
-      if (connector.id === COW_WIDGET_CONNECTOR_ID) return
-      return _addWagmiConnector(connector)
-    }
-  }
 
   reownAppKit = createAppKit({
     adapters: [wagmiAdapter],
