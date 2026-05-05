@@ -89,7 +89,11 @@ function getConnectors(): ConnectorInstance[] {
       ]
     }
 
-    return [safe({ shimDisconnect: true }), injected({ shimDisconnect: true })]
+    // Safe iframe: only the safe connector is needed. Do NOT include the plain `injected`
+    // connector — MetaMask is a per-origin singleton and fires `accountsChanged` across all
+    // same-origin frames. This causes the Safe iframe to briefly switch to the regular tab's
+    // wallet on connect/disconnect, then snap back to the Safe wallet.
+    return [safe({ shimDisconnect: true })]
   }
 
   return [injected({ shimDisconnect: true })]
