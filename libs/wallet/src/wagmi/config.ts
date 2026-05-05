@@ -204,7 +204,11 @@ if (isSafeIframe) {
     // auto-detection would pick up MetaMask's state from the main app tab, causing
     // cross-context connection leaks.
     enableEIP6963: !isImTokenBrowser && !isInjectedWidget(),
-    enableReconnect: true,
+    // In the widget, disable AppKit's reconnect — it reads shared @appkit/* localStorage
+    // (via storage events with e.newValue, bypassing our Storage.prototype interception)
+    // and re-syncs the widget to the regular tab's wallet. The widget reconnects explicitly
+    // via ReconnectOnMount with COW_WIDGET_CONNECTOR_ID instead.
+    enableReconnect: !isInjectedWidget(),
     enableWalletGuide: false,
     featuredWalletIds: [
       'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa',
