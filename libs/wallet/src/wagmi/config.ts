@@ -28,11 +28,39 @@ export const IS_CROSS_ORIGIN_IFRAME = (() => {
   }
 })()
 
-// Skip AppKit in the Safe iframe (interferes with Safe's postMessage flow) and in the
-// widget (AppKit's WagmiAdapter.watchAccount/syncConnections reacts to browser extension
-// accountsChanged events that fire across all same-origin tabs, causing cross-tab wallet sync).
-// Both use plain wagmi configs instead — the widget connects via injected extensions directly.
-const skipAppKit = IS_CROSS_ORIGIN_IFRAME || isInjectedWidget()
+// Safe App iframe: skip AppKit entirely — it interferes with Safe's postMessage flow.
+const isSafeIframe = IS_CROSS_ORIGIN_IFRAME && !isInjectedWidget()
+
+// In the widget, redirect ALL localStorage access to sessionStorage.
+// sessionStorage is per-browsing-context — no cross-tab `storage` events fire.
+// This isolates both wagmi keys AND AppKit's @appkit/* keys from the regular app tab.
+// We patch Storage.prototype because AppKit's SafeLocalStorage resolves through it.
+if (typeof window !== 'undefined' && isInjectedWidget()) {
+  const origSetItem = Storage.prototype.setItem
+  const origGetItem = Storage.prototype.getItem
+  const origRemoveItem = Storage.prototype.removeItem
+
+  Storage.prototype.setItem = function (key: string, value: string) {
+    if (this === localStorage) {
+      origSetItem.call(sessionStorage, key, value)
+    } else {
+      origSetItem.call(this, key, value)
+    }
+  }
+  Storage.prototype.getItem = function (key: string): string | null {
+    if (this === localStorage) {
+      return origGetItem.call(sessionStorage, key)
+    }
+    return origGetItem.call(this, key)
+  }
+  Storage.prototype.removeItem = function (key: string) {
+    if (this === localStorage) {
+      origRemoveItem.call(sessionStorage, key)
+    } else {
+      origRemoveItem.call(this, key)
+    }
+  }
+}
 
 function getConnectors(): ConnectorInstance[] {
   // Widget context — checked BEFORE the cross-origin iframe check because the widget
@@ -125,10 +153,8 @@ let wagmiAdapter: WagmiAdapter | null = null
 let reownAppKit: ReturnType<typeof createAppKit> | null = null
 let config: Config
 
-if (skipAppKit) {
-  // Safe iframe or widget: no AppKit — use a plain wagmi config.
-  // This avoids AppKit's WagmiAdapter.watchAccount/syncConnections which amplify
-  // browser extension events across same-origin tabs.
+if (isSafeIframe) {
+  // Safe App iframe: no AppKit — use a plain wagmi config with only the Safe connector.
   config = createConfig({
     connectors,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,6 +174,23 @@ if (skipAppKit) {
 
   config = wagmiAdapter.wagmiConfig
 
+  const RECENT_CONNECTOR_KEY = 'recentConnectorId'
+  if (isInjectedWidget()) {
+    // Recent connector takes priority, and we have to override it in the widget
+    storage.setItem(RECENT_CONNECTOR_KEY, COW_WIDGET_CONNECTOR_ID)
+
+    // Prevent the CoW Widget connector from appearing in the wallet modal.
+    // It must remain registered with wagmi (for reconnect/connect to work) but should not be
+    // shown as an option — users connect via the parent dapp's wallet, not by picking a wallet manually.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const _addWagmiConnector = (wagmiAdapter as any).addWagmiConnector.bind(wagmiAdapter)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(wagmiAdapter as any).addWagmiConnector = async (connector: { id: string }) => {
+      if (connector.id === COW_WIDGET_CONNECTOR_ID) return
+      return _addWagmiConnector(connector)
+    }
+  }
+
   reownAppKit = createAppKit({
     adapters: [wagmiAdapter],
     allowUnsupportedChain: true,
@@ -158,7 +201,10 @@ if (skipAppKit) {
     // imToken is instead featured as a WalletConnect option (featuredWalletIds) so it appears on
     // the first modal screen, and the WalletConnect path works correctly inside imToken's browser.
     enableEIP6963: !isImTokenBrowser,
-    enableReconnect: true,
+    // Disable in the widget — the widget uses sessionStorage so there's no persisted state
+    // to reconnect from. Also prevents AppKit from reacting to cross-tab extension events
+    // via syncConnections() when both tabs share the same origin.
+    enableReconnect: !isInjectedWidget(),
     enableWalletGuide: false,
     featuredWalletIds: [
       'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa',
