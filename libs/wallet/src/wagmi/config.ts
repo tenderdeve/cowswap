@@ -39,7 +39,9 @@ const isSafeIframe = IS_CROSS_ORIGIN_IFRAME && !isInjectedWidget()
 // We patch Storage.prototype (not the localStorage instance) because browsers may ignore
 // own-property overrides on native host objects. AppKit's SafeLocalStorage calls
 // `localStorage.setItem()` which resolves through Storage.prototype.
-if (typeof window !== 'undefined' && IS_CROSS_ORIGIN_IFRAME) {
+// Also run in the widget — even though it may be same-origin (e.g. widget-configurator
+// uses the same baseUrl), it still needs isolation from the main app's AppKit state.
+if (typeof window !== 'undefined' && (IS_CROSS_ORIGIN_IFRAME || isInjectedWidget())) {
   const origSetItem = Storage.prototype.setItem
   const origGetItem = Storage.prototype.getItem
   const origRemoveItem = Storage.prototype.removeItem
