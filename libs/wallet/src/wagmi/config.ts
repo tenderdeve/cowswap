@@ -33,41 +33,6 @@ export const IS_CROSS_ORIGIN_IFRAME = (() => {
 // but with localStorage isolation (see below) to avoid cross-context state leaks.
 const isSafeIframe = IS_CROSS_ORIGIN_IFRAME && !isInjectedWidget()
 
-// Isolate AppKit's @appkit/* localStorage keys in ALL cross-origin iframes (Safe App and widget).
-// The regular app's @appkit/* writes trigger `storage` events in iframes on the same
-// origin, causing the Safe iframe to blink and the widget to leak connection state.
-// We patch Storage.prototype (not the localStorage instance) because browsers may ignore
-// own-property overrides on native host objects. AppKit's SafeLocalStorage calls
-// `localStorage.setItem()` which resolves through Storage.prototype.
-// Also run in the widget — even though it may be same-origin (e.g. widget-configurator
-// uses the same baseUrl), it still needs isolation from the main app's AppKit state.
-if (typeof window !== 'undefined' && (IS_CROSS_ORIGIN_IFRAME || isInjectedWidget())) {
-  const origSetItem = Storage.prototype.setItem
-  const origGetItem = Storage.prototype.getItem
-  const origRemoveItem = Storage.prototype.removeItem
-
-  Storage.prototype.setItem = function (key: string, value: string) {
-    if (this === localStorage && key.startsWith('@appkit/')) {
-      origSetItem.call(sessionStorage, key, value)
-    } else {
-      origSetItem.call(this, key, value)
-    }
-  }
-  Storage.prototype.getItem = function (key: string): string | null {
-    if (this === localStorage && key.startsWith('@appkit/')) {
-      return origGetItem.call(sessionStorage, key)
-    }
-    return origGetItem.call(this, key)
-  }
-  Storage.prototype.removeItem = function (key: string) {
-    if (this === localStorage && key.startsWith('@appkit/')) {
-      origRemoveItem.call(sessionStorage, key)
-    } else {
-      origRemoveItem.call(this, key)
-    }
-  }
-}
-
 function getConnectors(): ConnectorInstance[] {
   // Widget context — checked BEFORE the cross-origin iframe check because the widget
   // can be same-origin (e.g. widget-configurator uses the same baseUrl).
@@ -81,6 +46,7 @@ function getConnectors(): ConnectorInstance[] {
           provider: new WidgetEthereumProvider() as EIP1193Provider,
         },
       }),
+      injected({ shimDisconnect: true }),
       // Include Safe connector so the widget can auto-connect when hosted inside a Safe app
       // (e.g. widget-configurator loaded as a Safe App). IframeSafeSdkBridge in widget-lib
       // already forwards the Safe SDK postMessages through the configurator to app.safe.global.
@@ -129,13 +95,18 @@ const WAGMI_STORAGE_KEY = isInjectedWidget()
     ? 'cowswap-wallet-safe'
     : 'cowswap-wallet'
 
+// Use sessionStorage for the widget — it's per-browsing-context, so no cross-tab
+// `storage` events fire. This fully isolates the widget's wagmi + AppKit state from
+// the regular app tab, even though they share the same origin.
+const storageBackend = isInjectedWidget() ? window?.sessionStorage : window?.localStorage
+
 const storage =
   typeof window === 'undefined'
     ? createStorage({
         storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
       })
     : createStorage({
-        storage: window.localStorage,
+        storage: storageBackend,
         key: WAGMI_STORAGE_KEY,
       })
 
@@ -200,15 +171,8 @@ if (isSafeIframe) {
     // through too many async layers, losing the iOS WebKit gesture context — the call hangs forever.
     // imToken is instead featured as a WalletConnect option (featuredWalletIds) so it appears on
     // the first modal screen, and the WalletConnect path works correctly inside imToken's browser.
-    // Also disable EIP-6963 in the widget — MetaMask is a per-origin singleton, so EIP-6963
-    // auto-detection would pick up MetaMask's state from the main app tab, causing
-    // cross-context connection leaks.
-    enableEIP6963: !isImTokenBrowser && !isInjectedWidget(),
-    // In the widget, disable AppKit's reconnect — it reads shared @appkit/* localStorage
-    // (via storage events with e.newValue, bypassing our Storage.prototype interception)
-    // and re-syncs the widget to the regular tab's wallet. The widget reconnects explicitly
-    // via ReconnectOnMount with COW_WIDGET_CONNECTOR_ID instead.
-    enableReconnect: !isInjectedWidget(),
+    enableEIP6963: !isImTokenBrowser,
+    enableReconnect: true,
     enableWalletGuide: false,
     featuredWalletIds: [
       'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa',
