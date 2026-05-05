@@ -39,6 +39,11 @@ function getConnectors(): ConnectorInstance[] {
   // Widget context — checked BEFORE the cross-origin iframe check because the widget
   // can be same-origin (e.g. widget-configurator uses the same baseUrl).
   if (isInjectedWidget()) {
+    // NO plain `injected` connector — it subscribes to window.ethereum.on('accountsChanged')
+    // which the browser extension fires across ALL same-origin contexts (including this iframe).
+    // This is what causes the widget to sync with the regular app tab.
+    // In dapp mode, COW_WIDGET_CONNECTOR_ID bridges to the parent's wallet.
+    // In standalone mode, users connect via WalletConnect (to be added).
     return [
       injected({
         shimDisconnect: true,
@@ -48,10 +53,6 @@ function getConnectors(): ConnectorInstance[] {
           provider: new WidgetEthereumProvider() as EIP1193Provider,
         },
       }),
-      // Plain injected connector for standalone mode — lets users connect browser extensions
-      // directly via wagmi's connect() without AppKit.
-      injected({ shimDisconnect: true }),
-      // Include Safe connector so the widget can auto-connect when hosted inside a Safe app
       safe({ shimDisconnect: true }),
     ]
   }

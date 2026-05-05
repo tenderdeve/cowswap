@@ -92,12 +92,12 @@ function OpenWalletModalOnCustomEvent(): null {
         // Regular app: open AppKit's wallet selection modal
         void reownAppKit.open()
       } else {
-        // Widget (no AppKit): connect directly via the injected connector.
-        // This triggers the browser extension popup (MetaMask/Rabby account selector).
-        const injectedConnector = config.connectors.find((c) => c.id === 'injected')
-        if (injectedConnector) {
-          void connect(config, { connector: injectedConnector }).catch((error) => {
-            console.debug('[OpenWalletModal] injected connect failed', error)
+        // Widget (no AppKit): connect via the COW_WIDGET_CONNECTOR_ID connector.
+        // In dapp mode this bridges to the parent's wallet via WidgetEthereumProvider.
+        const widgetConnector = config.connectors.find((c) => c.id === COW_WIDGET_CONNECTOR_ID)
+        if (widgetConnector) {
+          void connect(config, { connector: widgetConnector }).catch((error) => {
+            console.debug('[OpenWalletModal] widget connect failed', error)
           })
         }
       }
