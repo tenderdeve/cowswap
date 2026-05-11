@@ -5,8 +5,6 @@ import { SupportedLocale } from '@cowprotocol/common-const'
 import { i18n, Messages } from '@lingui/core'
 import { I18nProvider } from '@lingui/react'
 
-import { useIsInternationalizationEnabled } from 'common/hooks/featureFlags/useIsInternationalizationEnabled'
-
 import { dynamicActivate } from './localeMessages'
 
 interface ProviderProps {
@@ -17,15 +15,13 @@ interface ProviderProps {
 }
 
 export function Provider({ locale, messages, onActivate, children }: ProviderProps): ReactNode {
-  const isInternationalizationEnabled = useIsInternationalizationEnabled()
-
   useEffect(() => {
-    dynamicActivate(locale, isInternationalizationEnabled)
+    dynamicActivate(locale)
       .then(() => onActivate?.(locale))
       .catch((error) => {
         console.error('Failed to activate locale: ', locale, error)
       })
-  }, [locale, onActivate, isInternationalizationEnabled])
+  }, [locale, onActivate])
 
   // if i18n is not activated (i18n.locale === ''), then I18nProvider renders null ("white screen") on initial render
   // that's why we detect locale and load messages BEFORE initial render

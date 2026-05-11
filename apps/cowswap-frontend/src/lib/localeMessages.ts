@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, SupportedLocale } from '@cowprotocol/common-const'
+import { SupportedLocale } from '@cowprotocol/common-const'
 
 import { i18n, Messages } from '@lingui/core'
 
@@ -20,17 +20,8 @@ export async function loadActiveLocaleMessages(): Promise<Messages | undefined> 
   }
 }
 
-export async function dynamicActivate(locale: SupportedLocale, isInternationalizationEnabled?: boolean): Promise<void> {
+export async function dynamicActivate(locale: SupportedLocale): Promise<void> {
   try {
-    // Load default (en-US) catalog if internationalization is disabled
-    if (!isInternationalizationEnabled) {
-      const defaultCatalog = await loadLocaleMessages(DEFAULT_LOCALE)
-
-      i18n.load(DEFAULT_LOCALE, defaultCatalog)
-      i18n.activate(DEFAULT_LOCALE)
-      return
-    }
-
     const catalog = await loadLocaleMessages(locale)
 
     i18n.load(locale, catalog)
