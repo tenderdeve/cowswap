@@ -7,7 +7,7 @@ import { faGroupArrowsRotate, faPlus } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { bungeeBridgeProvider } from 'sdk/cowSdk'
 
-import { Order } from 'api/operator'
+import { Order, ORDER_FINAL_FAILED_STATUSES } from 'api/operator'
 import { getCowSwapOrderUrl } from 'utils/getCowSwapOrderUrl'
 import { getSocketApiUrl, getSocketUrl } from 'utils/socket'
 
@@ -31,6 +31,9 @@ export function OrderIdItem({ chainId, order, onCopy, bridgeProviderId }: OrderI
   const socketUrl = getSocketUrl(orderId)
   const socketApiUrl = getSocketApiUrl(orderId)
   const cowSwapOrderUrl = getCowSwapOrderUrl(chainId, order)
+  const isBungeeBridgeOrder = bridgeProviderId === bungeeBridgeProvider.info.dappId
+  const isFinalFailed = ORDER_FINAL_FAILED_STATUSES.includes(order.status)
+  const showSocketLinks = isBungeeBridgeOrder && !isFinalFailed
 
   return (
     <DetailRow label="Order Id" tooltipText={DetailsTableTooltips.orderID}>
@@ -46,7 +49,7 @@ export function OrderIdItem({ chainId, order, onCopy, bridgeProviderId }: OrderI
             New order↗
           </ExternalLinkButton>
         )}
-        {bridgeProviderId === bungeeBridgeProvider.info.dappId && (
+        {showSocketLinks && (
           <>
             <ExternalLinkButton href={socketUrl} target="_blank" rel="noopener noreferrer">
               <FontAwesomeIcon icon={faGroupArrowsRotate} />
