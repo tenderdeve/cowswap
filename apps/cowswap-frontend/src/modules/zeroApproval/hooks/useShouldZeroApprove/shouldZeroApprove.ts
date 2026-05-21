@@ -63,7 +63,10 @@ export async function shouldZeroApprove({
 
     return false
   } catch (e) {
-    console.error('shouldZeroApprove #1 error', e)
+    // Expected: a direct approve simulation can fail for tokens like USDT that
+    // require resetting the allowance to zero first. We probe that path below,
+    // so log this at warn level to avoid a scary error in the console.
+    console.warn('[shouldZeroApprove] direct approve simulation failed, probing zero-approval', e)
     try {
       await simulateContract(config, {
         address: tokenAddress,
@@ -73,7 +76,7 @@ export async function shouldZeroApprove({
       })
       return true
     } catch (e) {
-      console.error('shouldZeroApprove #2 error', e)
+      console.error('[shouldZeroApprove] zero-approval simulation failed', e)
       return false
     }
   }
