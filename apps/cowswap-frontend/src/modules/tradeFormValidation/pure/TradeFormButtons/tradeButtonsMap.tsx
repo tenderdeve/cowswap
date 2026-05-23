@@ -38,7 +38,7 @@ function getBridgeQuoteErrorTexts(): Record<BridgeQuoteErrors, string> {
     [BridgeQuoteErrors.API_ERROR]: DEFAULT_QUOTE_ERROR,
     [BridgeQuoteErrors.INVALID_BRIDGE]: DEFAULT_QUOTE_ERROR,
     [BridgeQuoteErrors.TX_BUILD_ERROR]: DEFAULT_QUOTE_ERROR,
-    [BridgeQuoteErrors.QUOTE_ERROR]: DEFAULT_QUOTE_ERROR,
+    [BridgeQuoteErrors.QUOTE_ERROR]: t`Insufficient liquidity for this trade.`,
     [BridgeQuoteErrors.INVALID_API_JSON_RESPONSE]: DEFAULT_QUOTE_ERROR,
     [BridgeQuoteErrors.NO_INTERMEDIATE_TOKENS]: t`No routes found`,
     [BridgeQuoteErrors.NO_ROUTES]: t`No routes found`,

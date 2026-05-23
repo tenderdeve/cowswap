@@ -161,5 +161,5 @@ function parseError(errorLocation: string, error: unknown): QuoteApiError | Brid
         errorType: QuoteApiErrorCodes.UNHANDLED_ERROR,
         description: String(error),
       })
-    : new BridgeProviderQuoteError(BridgeQuoteErrors.API_ERROR, { context: error })
+    : new BridgeProviderQuoteError(BridgeQuoteErrors.NO_ROUTES, { context: error })
 }
