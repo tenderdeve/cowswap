@@ -1,14 +1,17 @@
 import { RPC_URLS, VIEM_CHAINS } from '@cowprotocol/common-const'
 import { getCurrentChainIdFromUrl, isImTokenBrowser, isInjectedWidget } from '@cowprotocol/common-utils'
-import { SupportedChainId } from '@cowprotocol/cow-sdk'
+import { EvmChains, isEvmChain } from '@cowprotocol/cow-sdk'
 import { WidgetEthereumProvider } from '@cowprotocol/iframe-transport'
 
+import { solana } from '@reown/appkit/networks'
 import { createAppKit } from '@reown/appkit/react'
+import { SolanaAdapter } from '@reown/appkit-adapter-solana/react'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { injected, safe } from '@wagmi/connectors'
 import { EIP1193Provider, http } from 'viem'
 import { createConfig, createStorage, type Config, type Transport } from 'wagmi'
 
+import { IS_SOLANA_ENABLED } from './consts'
 import { activeProviderRef, interceptEIP6963Providers, PROVIDER_DISCONNECTED } from './providerIsolation'
 
 import { COW_WIDGET_CONNECTOR_ID, SUPPORTED_REOWN_NETWORKS } from '../reown/consts'
@@ -111,20 +114,20 @@ function getConnectors(): ConnectorInstance[] {
 
 const wagmiTransports = SUPPORTED_REOWN_NETWORKS.reduce(
   (acc, chain) => {
-    const chainId = chain.id as SupportedChainId
+    const chainId = chain.id as EvmChains
     const url = RPC_URLS[chainId]
     if (url) {
       acc[chainId] = http(url)
     }
     return acc
   },
-  {} as Record<SupportedChainId, Transport>,
+  {} as Record<EvmChains, Transport>,
 )
 
 /** CAIP-shaped RPCs for AppKit UI / network metadata (pairs with `wagmiTransports`). */
 const customRpcUrls: Record<string, Array<{ url: string }>> = {}
 for (const chain of SUPPORTED_REOWN_NETWORKS) {
-  const url = RPC_URLS[chain.id as SupportedChainId]
+  const url = RPC_URLS[chain.id as EvmChains]
   if (url) {
     customRpcUrls[`eip155:${chain.id}`] = [{ url }]
   }
@@ -183,6 +186,7 @@ const metadata = {
 }
 
 const connectors = getConnectors()
+const solanaWeb3JsAdapter = new SolanaAdapter()
 
 let wagmiAdapter: WagmiAdapter | null = null
 let reownAppKit: ReturnType<typeof createAppKit> | null = null
@@ -244,11 +248,14 @@ if (isSafeIframe) {
     }
   }
 
+  const urlChainId = getCurrentChainIdFromUrl()
+  const defaultEvmChainId: EvmChains = isEvmChain(urlChainId) ? urlChainId : EvmChains.MAINNET
+
   reownAppKit = createAppKit({
-    adapters: [wagmiAdapter],
+    adapters: IS_SOLANA_ENABLED ? [wagmiAdapter, solanaWeb3JsAdapter] : [wagmiAdapter],
     allowUnsupportedChain: true,
     customRpcUrls,
-    defaultNetwork: VIEM_CHAINS[getCurrentChainIdFromUrl()],
+    defaultNetwork: VIEM_CHAINS[defaultEvmChainId],
     // Disable EIP-6963 inside imToken's browser: AppKit's EIP-6963 path calls eth_requestAccounts
     // through too many async layers, losing the iOS WebKit gesture context — the call hangs forever.
     // imToken is instead featured as a WalletConnect option (featuredWalletIds) so it appears on
@@ -268,7 +275,7 @@ if (isSafeIframe) {
       connectorTypeOrder: ['injected', 'recent', 'walletConnect'],
     },
     metadata,
-    networks: SUPPORTED_REOWN_NETWORKS,
+    networks: IS_SOLANA_ENABLED ? [...SUPPORTED_REOWN_NETWORKS, solana] : SUPPORTED_REOWN_NETWORKS,
     projectId,
     termsConditionsUrl:
       'https://cow.fi/legal/cowswap-terms?utm_source=swap.cow.fi&utm_medium=web&utm_content=wallet-modal-terms-link',
